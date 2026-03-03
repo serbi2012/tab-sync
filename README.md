@@ -26,7 +26,7 @@
 
 <br />
 
-[**Getting Started**](#-getting-started) · [**API**](#-api-reference) · [**React**](#%EF%B8%8F-react) · [**Architecture**](#-architecture) · [**Examples**](#-examples) · [**Live Demo**](https://serbi2012.github.io/tab-bridge/)
+[**Getting Started**](#-getting-started) · [**API**](#-api-reference) · [**React**](#%EF%B8%8F-react) · [**Zustand**](#-zustand) · [**Next.js**](#-nextjs) · [**Architecture**](#-architecture) · [**Examples**](#-examples) · [**Live Demo**](https://serbi2012.github.io/tab-bridge/)
 
 </div>
 
@@ -75,6 +75,9 @@ Intercept, validate, and transform state changes before they're applied
 
 #### 💾 State Persistence
 Survive page reloads with key whitelisting and custom storage backends
+
+#### 🐻 Zustand Middleware
+One-line integration — `tabSync()` wraps any Zustand store for cross-tab sync
 
 #### 📦 Zero Dependencies
 Native browser APIs only, ~4KB gzipped, fully tree-shakable
@@ -513,6 +516,180 @@ Components using only `useTabSyncActions` **never re-render** due to state chang
 
 <br />
 
+## 🐻 Zustand
+
+One-line integration for [Zustand](https://github.com/pmndrs/zustand) stores — all tabs stay in sync automatically.
+
+```bash
+npm install zustand
+```
+
+```ts
+import { create } from 'zustand';
+import { tabSync } from 'tab-bridge/zustand';
+
+const useStore = create(
+  tabSync(
+    (set) => ({
+      count: 0,
+      theme: 'light',
+      inc: () => set((s) => ({ count: s.count + 1 })),
+      setTheme: (t: string) => set({ theme: t }),
+    }),
+    { channel: 'my-app' }
+  )
+);
+
+// That's it — all tabs now share the same state.
+// Functions (actions) are never synced, only data.
+```
+
+<details open>
+<summary><b>📋 Middleware Options</b></summary>
+
+<br />
+
+| Option | Type | Default | Description |
+|:-------|:-----|:--------|:------------|
+| `channel` | `string` | `'tab-sync-zustand'` | Channel name for cross-tab communication |
+| `include` | `string[]` | — | Only sync these keys (mutually exclusive with `exclude`) |
+| `exclude` | `string[]` | — | Exclude these keys from syncing (mutually exclusive with `include`) |
+| `merge` | `(local, remote, key) => value` | LWW | Custom conflict resolution |
+| `transport` | `'broadcast-channel'` \| `'local-storage'` | auto | Force a specific transport |
+| `debug` | `boolean` | `false` | Enable debug logging |
+| `onError` | `(error) => void` | — | Error callback |
+| `onSyncReady` | `(instance) => void` | — | Access the underlying `TabSyncInstance` for RPC/leader features |
+
+</details>
+
+<details>
+<summary><b>🔑 Selective Key Sync</b></summary>
+
+<br />
+
+```ts
+const useStore = create(
+  tabSync(
+    (set) => ({
+      count: 0,
+      theme: 'light',
+      localDraft: '',       // won't be synced
+      inc: () => set((s) => ({ count: s.count + 1 })),
+    }),
+    {
+      channel: 'my-app',
+      exclude: ['localDraft'],   // keep this key local-only
+    }
+  )
+);
+```
+
+</details>
+
+<details>
+<summary><b>🤝 Works with Zustand <code>persist</code></b></summary>
+
+<br />
+
+Compose with Zustand's `persist` middleware — order doesn't matter:
+
+```ts
+import { persist } from 'zustand/middleware';
+
+const useStore = create(
+  persist(
+    tabSync(
+      (set) => ({
+        count: 0,
+        inc: () => set((s) => ({ count: s.count + 1 })),
+      }),
+      { channel: 'my-app' }
+    ),
+    { name: 'my-store' }
+  )
+);
+```
+
+</details>
+
+<details>
+<summary><b>🚀 Advanced: Access tab-bridge Instance</b></summary>
+
+<br />
+
+Use `onSyncReady` to access the underlying `TabSyncInstance` for RPC, leader election, and other advanced features:
+
+```ts
+let syncInstance: TabSyncInstance | null = null;
+
+const useStore = create(
+  tabSync(
+    (set) => ({ count: 0 }),
+    {
+      channel: 'my-app',
+      onSyncReady: (instance) => {
+        syncInstance = instance;
+
+        instance.handle('getCount', () => useStore.getState().count);
+
+        instance.onLeader(() => {
+          console.log('This tab is now the leader');
+          return () => console.log('Leadership lost');
+        });
+      },
+    }
+  )
+);
+```
+
+</details>
+
+<br />
+
+---
+
+<br />
+
+## 📘 Next.js
+
+Using tab-bridge with **Next.js App Router**? Since tab-bridge relies on browser APIs, all usage must be in Client Components.
+
+```tsx
+// app/providers/tab-sync-provider.tsx
+'use client';
+
+import { TabSyncProvider } from 'tab-bridge/react';
+
+export function AppTabSyncProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <TabSyncProvider options={{ initial: { count: 0 }, channel: 'my-app' }}>
+      {children}
+    </TabSyncProvider>
+  );
+}
+```
+
+```tsx
+// app/layout.tsx
+import { AppTabSyncProvider } from './providers/tab-sync-provider';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html><body>
+      <AppTabSyncProvider>{children}</AppTabSyncProvider>
+    </body></html>
+  );
+}
+```
+
+> **Full guide**: See [`docs/NEXTJS.md`](./docs/NEXTJS.md) for SSR safety patterns, hydration mismatch prevention, `useEffect` initialization, and Zustand integration with Next.js.
+
+<br />
+
+---
+
+<br />
+
 ## 🚨 Error Handling
 
 Structured errors with error codes for precise `catch` handling:
@@ -640,6 +817,19 @@ import {
 <br />
 
 ## 💡 Examples
+
+### 🎯 Interactive Demos
+
+Try these demos live — open multiple tabs to see real-time synchronization in action:
+
+| Demo | Description | Features |
+|:-----|:-----------|:---------|
+| [**Collaborative Editor**](https://serbi2012.github.io/tab-bridge/collaborative-editor.html) | Multi-tab real-time text editing | State Sync, Typing Indicators |
+| [**Shopping Cart**](https://serbi2012.github.io/tab-bridge/shopping-cart.html) | Cart synced across all tabs + persistent | State Sync, Persistence |
+| [**Leader Dashboard**](https://serbi2012.github.io/tab-bridge/leader-dashboard.html) | Only leader fetches data, followers use RPC | Leader Election, RPC, callAll |
+| [**Full Feature Demo**](https://serbi2012.github.io/tab-bridge/) | All features in one page | Everything |
+
+### Code Examples
 
 <details>
 <summary><b>🔐 Shared Authentication State</b></summary>

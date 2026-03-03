@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>서버 모니터 | tab-bridge 리더 대시보드 데모</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface2: #1f2937;
+      --surface3: #374151;
+      --text: #f9fafb;
+      --text2: #9ca3af;
+      --text3: #6b7280;
+      --border: #374151;
+      --border2: #4b5563;
+      --cyan: #06b6d4;
+      --cyan-dim: #0891b2;
+      --teal: #14b8a6;
+      --purple: #a78bfa;
+      --purple-dim: #8b5cf6;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-xs: 6px;
+      --shadow: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
+      --shadow-glow: 0 0 20px rgba(6,182,212,.15);
+      --transition: .2s cubic-bezier(.4,0,.2,1);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    ::selection { background: var(--cyan); color: var(--bg); }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 20px 48px; }
+
+    /* Status Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10,14,23,.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      margin-bottom: 24px;
+    }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .header-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      background: linear-gradient(135deg, var(--cyan), var(--teal));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .status-badge.leader {
+      background: rgba(167,139,250,.15);
+      color: var(--purple);
+      border: 1px solid rgba(167,139,250,.3);
+    }
+    .status-badge.follower {
+      background: rgba(234,179,8,.12);
+      color: var(--yellow);
+      border: 1px solid rgba(234,179,8,.25);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    .status-badge.leader .status-dot { background: var(--purple); box-shadow: 0 0 8px var(--purple); }
+    .status-badge.follower .status-dot { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .6; }
+    }
+    .header-meta {
+      font-size: 12px;
+      color: var(--text3);
+      font-family: var(--mono);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      border: none;
+      transition: all var(--transition);
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn:hover {
+      background: var(--surface3);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .btn:active { transform: scale(.98); }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (min-width: 640px) {
+      .metrics-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: all var(--transition);
+      box-shadow: var(--shadow);
+    }
+    .metric-card:hover { border-color: var(--border2); }
+    .metric-card.pulse-update::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(6,182,212,.08), transparent);
+      animation: card-pulse .6s ease-out;
+      pointer-events: none;
+      border-radius: var(--radius);
+    }
+    @keyframes card-pulse {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .metric-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(6,182,212,.2);
+      color: var(--cyan);
+    }
+    .metric-value {
+      font-size: 32px;
+      font-weight: 800;
+      font-family: var(--mono);
+      line-height: 1.2;
+      color: var(--cyan);
+      margin-bottom: 8px;
+    }
+    .metric-value.percent { font-size: 28px; }
+    .progress-bar {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--cyan), var(--teal));
+      transition: width .5s cubic-bezier(.4,0,.2,1);
+    }
+    .metric-time {
+      font-size: 10px;
+      color: var(--text3);
+      margin-top: 10px;
+      font-family: var(--mono);
+    }
+
+    /* Main Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 800px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 0;
+      box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .icon { font-size: 18px; }
+
+    /* Tab Topology */
+    .topology {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      min-height: 100px;
+    }
+    .topology-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      background: var(--surface2);
+      transition: all var(--transition);
+    }
+    .topology-node.leader {
+      border-color: var(--purple);
+      background: rgba(167,139,250,.12);
+      box-shadow: 0 0 16px rgba(167,139,250,.2);
+    }
+    .topology-node.self {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(6,182,212,.2);
+    }
+    .topology-node .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .topology-node .id { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+    .topology-node .role {
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .topology-node.leader .role { color: var(--purple); }
+    .topology-arrow {
+      color: var(--text3);
+      font-size: 14px;
+    }
+
+    /* RPC Section */
+    .rpc-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .rpc-btn {
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      transition: all var(--transition);
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rpc-btn:hover:not(:disabled) {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(6,182,212,.08);
+    }
+    .rpc-btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .rpc-output {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      min-height: 120px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+    .rpc-output::-webkit-scrollbar { width: 6px; }
+    .rpc-output::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 3px; }
+
+    /* Event Log */
+    .log-container {
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .log-container::-webkit-scrollbar { width: 4px; }
+    .log-container::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+    .log-entry {
+      display: flex;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--text3); white-space: nowrap; }
+    .log-tag {
+      font-weight: 600;
+      white-space: nowrap;
+      min-width: 48px;
+    }
+    .log-tag.leader { color: var(--purple); }
+    .log-tag.sync { color: var(--cyan); }
+    .log-tag.rpc { color: var(--yellow); }
+    .log-tag.tab { color: var(--green); }
+    .log-msg { color: var(--text2); word-break: break-word; flex: 1; }
+    .log-empty { color: var(--text3); text-align: center; padding: 24px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-left">
+          <h1 class="header-title">서버 모니터</h1>
+          <div id="status-badge" class="status-badge follower">
+            <span class="status-dot"></span>
+            <span id="role-text">로딩 중...</span>
+          </div>
+          <div class="header-meta">
+            <span id="tab-count">0</span>개 탭 연결 · <span id="server-time">--:--:--</span>
+          </div>
+        </div>
+        <button class="btn" id="open-tab-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          새 탭 열기
+        </button>
+      </div>
+    </header>
+
+    <div class="metrics-grid">
+      <div class="metric-card" id="card-cpu">
+        <div class="metric-label">
+          CPU 사용률
+          <span id="cpu-badge" class="metric-badge" style="display:none;">via Leader</span>
+        </div>
+        <div class="metric-value percent" id="cpu-value">0%</div>
+        <div class="progress-bar"><div class="progress-fill" id="cpu-bar" style="width:0%"></div></div>
+        <div class="metric-time" id="cpu-time">업데이트 대기 중</div>
+      </div>
+      <div class="metric-card" id="card-memory">
+        <div class="metric-label">
+          메모리 사용률
+          <span id="mem-badge" class="metric-badge" style="display:none;">via Leader</span>
+        </div>
+        <div class="metric-value percent" id="memory-value">0%</div>
+        <div class="progress-bar"><div class="progress-fill" id="memory-bar" style="width:0%"></div></div>
+        <div class="metric-time" id="memory-time">업데이트 대기 중</div>
+      </div>
+      <div class="metric-card" id="card-users">
+        <div class="metric-label">
+          활성 사용자
+          <span id="users-badge" class="metric-badge" style="display:none;">via Leader</span>
+        </div>
+        <div class="metric-value" id="users-value">0</div>
+        <div class="metric-time" id="users-time">업데이트 대기 중</div>
+      </div>
+      <div class="metric-card" id="card-rps">
+        <div class="metric-label">
+          초당 요청 수
+          <span id="rps-badge" class="metric-badge" style="display:none;">via Leader</span>
+        </div>
+        <div class="metric-value" id="rps-value">0</div>
+        <div class="metric-time" id="rps-time">업데이트 대기 중</div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="card">
+        <div class="card-title"><span class="icon">🔀</span> 탭 토폴로지</div>
+        <div class="topology" id="topology">
+          <span class="log-empty">탭이 연결되면 여기에 표시됩니다</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span class="icon">📡</span> RPC 요청 (팔로워 전용)</div>
+        <div class="rpc-buttons">
+          <button class="rpc-btn" id="rpc-processes">프로세스 목록 요청</button>
+          <button class="rpc-btn" id="rpc-logs">최근 로그 요청</button>
+          <button class="rpc-btn" id="rpc-status">서버 상태 요청</button>
+        </div>
+        <div class="rpc-output" id="rpc-output">팔로워 탭에서 위 버튼을 눌러 리더에게 RPC를 보내보세요.
+리더 탭이 데이터 소스에 연결되어 상세 정보를 반환합니다.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-title"><span class="icon">📋</span> 이벤트 로그</div>
+      <div class="log-container" id="log-container">
+        <div class="log-empty">이벤트가 여기에 표시됩니다</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createTabSync } from '../dist/index.js';
+
+    function generateMetrics() {
+      return {
+        serverTime: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        cpuUsage: Math.round(30 + Math.random() * 50),
+        memoryUsage: Math.round(40 + Math.random() * 35),
+        activeUsers: Math.floor(100 + Math.random() * 200),
+        requestsPerSec: Math.floor(500 + Math.random() * 1500),
+        statusMessage: '정상 운영 중',
+      };
+    }
+
+    const sync = createTabSync({
+      initial: {
+        serverTime: '',
+        cpuUsage: 0,
+        memoryUsage: 0,
+        activeUsers: 0,
+        requestsPerSec: 0,
+        statusMessage: '',
+      },
+      channel: 'leader-dashboard-demo',
+    });
+
+    const TAB_COLORS = ['#06b6d4','#a78bfa','#22c55e','#eab308','#ef4444','#ec4899','#14b8a6','#f97316'];
+
+    const $ = (sel) => document.querySelector(sel);
+
+    function getTabColor(id) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+      return TAB_COLORS[Math.abs(hash) % TAB_COLORS.length];
+    }
+
+    function flashCard(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.remove('pulse-update');
+        void el.offsetWidth;
+        el.classList.add('pulse-update');
+      }
+    }
+
+    function log(tag, msg) {
+      const container = $('#log-container');
+      const empty = container.querySelector('.log-empty');
+      if (empty) empty.remove();
+      const time = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-time">${time}</span><span class="log-tag ${tag}">${tag.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+      container.prepend(entry);
+      while (container.children.length > 60) container.lastChild.remove();
+    }
+
+    function updateMetricsUI(state, isFollower) {
+      const cpu = state.cpuUsage ?? 0;
+      const mem = state.memoryUsage ?? 0;
+      const users = state.activeUsers ?? 0;
+      const rps = state.requestsPerSec ?? 0;
+      const time = state.serverTime || '--:--:--';
+
+      $('#cpu-value').textContent = cpu + '%';
+      $('#cpu-bar').style.width = cpu + '%';
+      $('#memory-value').textContent = mem + '%';
+      $('#memory-bar').style.width = mem + '%';
+      $('#users-value').textContent = users.toLocaleString();
+      $('#rps-value').textContent = rps.toLocaleString();
+      $('#server-time').textContent = time;
+
+      ['cpu', 'memory', 'users', 'rps'].forEach((key) => {
+        const timeEl = $(`#${key}-time`);
+        const badgeId = key === 'memory' ? 'mem' : key;
+        const badgeEl = $(`#${badgeId}-badge`);
+        if (timeEl) timeEl.textContent = `최종 업데이트: ${time}`;
+        if (badgeEl) badgeEl.style.display = isFollower ? 'inline' : 'none';
+      });
+    }
+
+    function renderTopology(tabs) {
+      const el = $('#topology');
+      if (!tabs.length) {
+        el.innerHTML = '<span class="log-empty">탭이 연결되면 여기에 표시됩니다</span>';
+        return;
+      }
+      el.innerHTML = tabs.map((t, i) => {
+        const isSelf = t.id === sync.id;
+        const color = getTabColor(t.id);
+        const short = t.id.slice(0, 4).toUpperCase();
+        const classes = ['topology-node'];
+        if (t.isLeader) classes.push('leader');
+        if (isSelf) classes.push('self');
+        const arrow = i < tabs.length - 1 ? '<span class="topology-arrow">→</span>' : '';
+        return `<div class="${classes.join(' ')}">
+          <div class="avatar" style="background:${color}">${short}</div>
+          <span class="id">${t.id.slice(0,8)}${isSelf ? ' (나)' : ''}</span>
+          <span class="role">${t.isLeader ? '👑 리더' : '팔로워'}</span>
+        </div>${arrow}`;
+      }).join('');
+    }
+
+    function updateStatus() {
+      const isLeader = sync.isLeader();
+      const badge = $('#status-badge');
+      const roleText = $('#role-text');
+      badge.className = 'status-badge ' + (isLeader ? 'leader' : 'follower');
+      roleText.textContent = isLeader
+        ? '👑 리더 (데이터 소스 연결됨)'
+        : '📡 팔로워 (리더 경유)';
+      $('#tab-count').textContent = sync.getTabCount();
+
+      const rpcButtons = document.querySelectorAll('.rpc-btn');
+      rpcButtons.forEach(btn => btn.disabled = isLeader);
+    }
+
+    sync.handle('getProcesses', () => [
+      { pid: 1234, name: 'node', cpu: '12%', memory: '256MB' },
+      { pid: 5678, name: 'nginx', cpu: '3%', memory: '64MB' },
+      { pid: 9012, name: 'postgres', cpu: '8%', memory: '512MB' },
+      { pid: 3456, name: 'redis', cpu: '1%', memory: '128MB' },
+    ]);
+
+    sync.handle('getRecentLogs', () => [
+      { time: '14:23:01', level: 'INFO', message: 'Request processed: GET /api/users' },
+      { time: '14:23:00', level: 'WARN', message: 'High memory usage detected: 72%' },
+      { time: '14:22:58', level: 'INFO', message: 'New WebSocket connection from 192.168.1.45' },
+      { time: '14:22:55', level: 'ERROR', message: 'Database query timeout after 5000ms' },
+    ]);
+
+    sync.handle('getServerStatus', () => ({
+      uptime: '3d 14h 22m',
+      version: 'v2.4.1',
+      environment: 'production',
+      region: 'ap-northeast-2',
+      lastDeploy: '2025-01-15 09:30:00',
+    }));
+
+    sync.onLeader(() => {
+      log('leader', '이 탭이 리더가 되었습니다. 데이터 소스 연결 시작.');
+      updateStatus();
+      const fetchData = () => {
+        const metrics = generateMetrics();
+        sync.patch(metrics);
+      };
+      fetchData();
+      const interval = setInterval(fetchData, 2000);
+      return () => {
+        clearInterval(interval);
+        log('leader', '리더 역할 해제. 데이터 수집 중지.');
+      };
+    });
+
+    sync.onChange((state, changedKeys, meta) => {
+      updateMetricsUI(state, !sync.isLeader());
+      if (changedKeys.length && !meta.isLocal) {
+        ['card-cpu','card-memory','card-users','card-rps'].forEach(flashCard);
+        log('sync', `메트릭 업데이트: ${changedKeys.join(', ')}`);
+      }
+    });
+
+    sync.onTabChange((tabs) => {
+      renderTopology(tabs);
+      updateStatus();
+      log('tab', `탭 변경 → ${tabs.length}개 연결`);
+    });
+
+    updateMetricsUI(sync.getAll(), !sync.isLeader());
+    updateStatus();
+    renderTopology(sync.getTabs());
+
+    $('#open-tab-btn').addEventListener('click', () => window.open(location.href, '_blank'));
+
+    async function doRpc(method, label) {
+      const output = $('#rpc-output');
+      if (sync.isLeader()) {
+        output.textContent = '이 탭은 리더입니다.\n다른 탭(팔로워)에서 RPC를 요청하세요.';
+        return;
+      }
+      output.textContent = `⏳ ${label} 요청 중...`;
+      try {
+        const result = await sync.call('leader', method);
+        output.textContent = `✅ 응답:\n\n${JSON.stringify(result, null, 2)}`;
+        log('rpc', `${label} 응답 수신`);
+      } catch (err) {
+        output.textContent = `❌ 에러: ${err.message}`;
+        log('rpc', `${label} 실패: ${err.message}`);
+      }
+    }
+
+    $('#rpc-processes').addEventListener('click', () => doRpc('getProcesses', '프로세스 목록'));
+    $('#rpc-logs').addEventListener('click', () => doRpc('getRecentLogs', '최근 로그'));
+    $('#rpc-status').addEventListener('click', () => doRpc('getServerStatus', '서버 상태'));
+
+    log('tab', `탭 시작 (${sync.id.slice(0, 8)})`);
+    setTimeout(() => {
+      renderTopology(sync.getTabs());
+      updateStatus();
+    }, 300);
+
+    window.addEventListener('beforeunload', () => sync.destroy());
+  </script>
+</body>
+</html>

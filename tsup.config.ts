@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'react/index': 'src/react/index.ts',
+    'zustand/index': 'src/zustand/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -11,6 +12,6 @@ export default defineConfig({
   sourcemap: false,
   treeshake: true,
   splitting: true,
-  external: ['react'],
+  external: ['react', 'zustand', 'zustand/vanilla'],
   outDir: 'dist',
 });

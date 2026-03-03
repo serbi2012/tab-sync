@@ -1,6 +1,6 @@
 {
   "name": "tab-bridge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Zero-dependency TypeScript library for real-time state synchronization across browser tabs, with leader election and cross-tab RPC",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -25,6 +25,16 @@
       "require": {
         "types": "./dist/react/index.d.cts",
         "default": "./dist/react/index.cjs"
+      }
+    },
+    "./zustand": {
+      "import": {
+        "types": "./dist/zustand/index.d.ts",
+        "default": "./dist/zustand/index.js"
+      },
+      "require": {
+        "types": "./dist/zustand/index.d.cts",
+        "default": "./dist/zustand/index.cjs"
       }
     }
   },
@@ -70,10 +80,14 @@
   },
   "sideEffects": false,
   "peerDependencies": {
-    "react": ">=18.0.0"
+    "react": ">=18.0.0",
+    "zustand": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "zustand": {
       "optional": true
     }
   },
@@ -86,6 +100,7 @@
     "react-dom": "^19.2.4",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "zustand": "^5.0.11"
   }
 }

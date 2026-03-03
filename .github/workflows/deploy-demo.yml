@@ -38,9 +38,11 @@ jobs:
       - name: Prepare pages directory
         run: |
           mkdir -p _site
-          cp examples/index.html _site/index.html
+          cp examples/*.html _site/
           cp -r dist _site/dist
-          sed -i "s|'../dist/index.js'|'./dist/index.js'|g" _site/index.html
+          for f in _site/*.html; do
+            sed -i "s|'../dist/index.js'|'./dist/index.js'|g" "$f"
+          done
 
       - uses: actions/upload-pages-artifact@v3
         with:

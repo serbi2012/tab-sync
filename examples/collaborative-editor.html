@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>실시간 협업 에디터 | tab-bridge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design Tokens ── */
+    :root {
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface2: #f1f5f9;
+      --text: #0f172a;
+      --text2: #475569;
+      --text3: #94a3b8;
+      --border: #e2e8f0;
+      --border2: #cbd5e1;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-soft: #eef2ff;
+      --accent: #8b5cf6;
+      --accent-soft: #f5f3ff;
+      --success: #22c55e;
+      --success-soft: #f0fdf4;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-xs: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+      --shadow-lg: 0 10px 25px -5px rgba(99,102,241,.15), 0 8px 10px -6px rgba(99,102,241,.1);
+      --transition: .2s cubic-bezier(.4,0,.2,1);
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --text: #f1f5f9;
+      --text2: #94a3b8;
+      --text3: #64748b;
+      --border: #334155;
+      --border2: #475569;
+      --primary: #818cf8;
+      --primary-hover: #6366f1;
+      --primary-soft: #1e1b4b;
+      --accent: #a78bfa;
+      --accent-soft: #2e1065;
+      --success-soft: #052e16;
+      --shadow: 0 1px 3px rgba(0,0,0,.3);
+      --shadow-md: 0 4px 6px rgba(0,0,0,.3);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,.4);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; transition: background var(--transition), color var(--transition); }
+    ::selection { background: var(--primary); color: #fff; }
+
+    /* ── Layout ── */
+    .app { max-width: 900px; margin: 0 auto; padding: 0 20px 48px; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      margin: 0 -20px;
+      padding: 16px 20px;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    [data-theme="dark"] .header { background: rgba(30,41,59,.9); }
+    .header-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .header-title { display: flex; align-items: center; gap: 10px; }
+    .header-title h1 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+    .header-title h1 span { background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .header-badge { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 99px; background: var(--primary-soft); color: var(--primary); }
+    .btn-open-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      transition: all var(--transition);
+      box-shadow: 0 2px 8px rgba(99,102,241,.25);
+    }
+    .btn-open-tab:hover { background: var(--primary-hover); box-shadow: 0 4px 14px rgba(99,102,241,.4); transform: translateY(-1px); }
+    .btn-open-tab:active { transform: translateY(0); }
+
+    /* ── Main Editor Area ── */
+    .main { flex: 1; padding-top: 24px; }
+    .editor-wrapper {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      transition: all var(--transition);
+    }
+    .editor-wrapper::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+    }
+    .editor-wrapper.flash::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--primary);
+      opacity: 0;
+      animation: flash 0.6s ease-out;
+      pointer-events: none;
+      border-radius: var(--radius);
+    }
+    @keyframes flash {
+      0% { opacity: .15; }
+      100% { opacity: 0; }
+    }
+    .editor-textarea {
+      width: 100%;
+      min-height: 320px;
+      padding: 24px 28px;
+      font-size: 16px;
+      font-family: var(--font);
+      line-height: 1.75;
+      color: var(--text);
+      background: var(--surface);
+      border: none;
+      outline: none;
+      resize: vertical;
+      transition: color var(--transition), background var(--transition);
+    }
+    .editor-textarea::placeholder { color: var(--text3); }
+
+    /* ── Stats Bar ── */
+    .stats-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 14px 20px;
+      background: var(--surface2);
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text2);
+    }
+    .stats-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .stats-item { display: flex; align-items: center; gap: 6px; }
+    .stats-label { color: var(--text3); }
+    .stats-value { font-family: var(--mono); font-weight: 600; color: var(--text); }
+    .last-editor { color: var(--text2); }
+    .last-editor strong { color: var(--primary); font-weight: 600; }
+
+    /* ── Typing Indicator ── */
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-xs);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      animation: typing-pulse 1.5s ease-in-out infinite;
+    }
+    .typing-indicator.hidden { display: none; }
+    @keyframes typing-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .7; }
+    }
+    .typing-dots { display: flex; gap: 2px; }
+    .typing-dots span { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: dot-bounce 0.6s ease-in-out infinite alternate; }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes dot-bounce { to { transform: translateY(-3px); } }
+
+    /* ── Connected Tabs ── */
+    .tabs-section { margin-top: 24px; }
+    .tabs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .tabs-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .tabs-count { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+    .tabs-grid {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .tab-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      transition: all var(--transition);
+    }
+    .tab-badge.self { border-color: var(--primary); background: var(--primary-soft); }
+    .tab-badge.leader { border-color: var(--success); background: var(--success-soft); }
+    .tab-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .tab-id { font-family: var(--mono); font-weight: 600; font-size: 12px; }
+    .tab-role { font-size: 11px; color: var(--text3); }
+    .tab-role.is-leader { color: var(--success); font-weight: 600; }
+
+    /* ── Sync Status ── */
+    .sync-status {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--text2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); } 50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-title">
+          <h1><span>실시간 협업 에디터</span></h1>
+          <span class="header-badge">tab-bridge</span>
+        </div>
+        <button class="btn-open-tab" id="open-tab-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          새 탭 열기
+        </button>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="editor-wrapper" id="editor-wrapper">
+        <textarea
+          class="editor-textarea"
+          id="editor"
+          placeholder="여기에 텍스트를 입력하면 모든 탭에 실시간으로 동기화됩니다. 새 탭을 열어 함께 편집해보세요!"
+        ></textarea>
+        <div class="stats-bar">
+          <div class="stats-left">
+            <div class="stats-item">
+              <span class="stats-label">글자 수</span>
+              <span class="stats-value" id="char-count">0</span>
+            </div>
+            <div class="stats-item">
+              <span class="stats-label">단어 수</span>
+              <span class="stats-value" id="word-count">0</span>
+            </div>
+            <div class="stats-item last-editor">
+              <span class="stats-label">마지막 편집</span>
+              <span id="last-editor-display">—</span>
+            </div>
+            <div class="typing-indicator hidden" id="typing-indicator">
+              <div class="typing-dots"><span></span><span></span><span></span></div>
+              <span id="typing-tab-label">다른 탭이 입력 중...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="tabs-section">
+        <div class="tabs-header">
+          <span class="tabs-title">연결된 탭</span>
+          <span class="tabs-count" id="tabs-count">0개 탭</span>
+        </div>
+        <div class="tabs-grid" id="tabs-grid"></div>
+      </section>
+
+      <div class="sync-status">
+        <div class="sync-dot"></div>
+        <span>내 탭 ID: <strong id="my-tab-id">—</strong></span>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { createTabSync } from '../dist/index.js';
+
+    const sync = createTabSync({
+      initial: {
+        text: '',
+        lastEditor: '',
+        editorName: '',
+        typingTabId: '',
+      },
+      channel: 'collab-editor-demo',
+    });
+
+    const TAB_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#22c55e','#06b6d4','#ef4444','#14b8a6'];
+
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => document.querySelectorAll(sel);
+
+    function getTabColor(id) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+      return TAB_COLORS[Math.abs(hash) % TAB_COLORS.length];
+    }
+
+    function shortId(id) {
+      return id.slice(0, 8).toUpperCase();
+    }
+
+    function flash(el) {
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+    }
+
+    function updateStats(text) {
+      const chars = text.length;
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      $('#char-count').textContent = chars.toLocaleString('ko-KR');
+      $('#word-count').textContent = words.toLocaleString('ko-KR');
+    }
+
+    let typingDebounceTimer = null;
+    const TYPING_DEBOUNCE_MS = 1000;
+
+    function setTyping(value) {
+      sync.patch({
+        typingTabId: value ? sync.id : '',
+      });
+    }
+
+    // ── Editor: IME-aware input handling ──
+    const editor = $('#editor');
+    let composing = false;
+
+    editor.addEventListener('compositionstart', () => { composing = true; });
+    editor.addEventListener('compositionend', (e) => {
+      composing = false;
+      const text = e.target.value;
+      sync.patch({
+        text,
+        lastEditor: sync.id,
+        editorName: shortId(sync.id),
+      });
+      updateStats(text);
+      setTyping(false);
+    });
+    editor.addEventListener('input', (e) => {
+      if (composing) return;
+      const text = e.target.value;
+      sync.patch({
+        text,
+        lastEditor: sync.id,
+        editorName: shortId(sync.id),
+        typingTabId: sync.id,
+      });
+      updateStats(text);
+
+      if (typingDebounceTimer) clearTimeout(typingDebounceTimer);
+      typingDebounceTimer = setTimeout(() => {
+        setTyping(false);
+        typingDebounceTimer = null;
+      }, TYPING_DEBOUNCE_MS);
+    });
+
+    // ── Sync text from remote tabs ──
+    sync.on('text', (value, meta) => {
+      if (!meta.isLocal) {
+        editor.value = value;
+        updateStats(value);
+        flash($('#editor-wrapper'));
+      }
+    });
+
+    sync.onChange((state, changedKeys, meta) => {
+      if (!meta.isLocal && changedKeys.includes('text')) {
+        editor.value = state.text;
+        updateStats(state.text);
+        flash($('#editor-wrapper'));
+      }
+    });
+
+    // ── Last editor display ──
+    function updateLastEditor() {
+      const lastEditor = sync.get('lastEditor');
+      const editorName = sync.get('editorName');
+      const el = $('#last-editor-display');
+      if (lastEditor && editorName) {
+        const isSelf = lastEditor === sync.id;
+        el.innerHTML = isSelf
+          ? `<strong>나 (${editorName})</strong>`
+          : `<strong>탭 ${editorName}</strong>`;
+      } else {
+        el.textContent = '—';
+      }
+    }
+
+    sync.on('lastEditor', () => updateLastEditor());
+    sync.on('editorName', () => updateLastEditor());
+
+    // ── Typing indicator ──
+    sync.on('typingTabId', (typingTabId) => {
+      const indicator = $('#typing-indicator');
+      const label = $('#typing-tab-label');
+      if (typingTabId && typingTabId !== sync.id) {
+        label.textContent = `탭 ${shortId(typingTabId)} 입력 중...`;
+        indicator.classList.remove('hidden');
+      } else {
+        indicator.classList.add('hidden');
+      }
+    });
+
+    // ── Connected tabs ──
+    function renderTabs() {
+      const tabs = sync.getTabs();
+      $('#tabs-count').textContent = `${tabs.length}개 탭`;
+      const grid = $('#tabs-grid');
+      grid.innerHTML = tabs.map((t) => {
+        const isSelf = t.id === sync.id;
+        const color = getTabColor(t.id);
+        const short = shortId(t.id);
+        const selfClass = isSelf ? ' self' : '';
+        const leaderClass = t.isLeader ? ' leader' : '';
+        const role = t.isLeader ? '리더' : '참여자';
+        const roleClass = t.isLeader ? ' is-leader' : '';
+        return `<div class="tab-badge${selfClass}${leaderClass}">
+          <div class="tab-avatar" style="background:${color}">${short.slice(0,4)}</div>
+          <div>
+            <div class="tab-id">${short}${isSelf ? ' (나)' : ''}</div>
+            <div class="tab-role${roleClass}">${role}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    sync.onTabChange(() => renderTabs());
+
+    // ── Init ──
+    editor.value = sync.get('text');
+    updateStats(sync.get('text'));
+    updateLastEditor();
+    $('#my-tab-id').textContent = shortId(sync.id);
+    renderTabs();
+
+    // Typing indicator initial state
+    const tid = sync.get('typingTabId');
+    if (tid && tid !== sync.id) {
+      $('#typing-indicator').classList.remove('hidden');
+      $('#typing-tab-label').textContent = `탭 ${shortId(tid)} 입력 중...`;
+    }
+
+    // ── Actions ──
+    $('#open-tab-btn').addEventListener('click', () => window.open(location.href, '_blank'));
+
+    window.addEventListener('beforeunload', () => sync.destroy());
+  </script>
+</body>
+</html>
