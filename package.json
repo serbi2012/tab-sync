@@ -62,11 +62,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/serbi2012/tab-sync.git"
+    "url": "git+https://github.com/serbi2012/tab-bridge.git"
   },
-  "homepage": "https://github.com/serbi2012/tab-sync#readme",
+  "homepage": "https://github.com/serbi2012/tab-bridge#readme",
   "bugs": {
-    "url": "https://github.com/serbi2012/tab-sync/issues"
+    "url": "https://github.com/serbi2012/tab-bridge/issues"
   },
   "sideEffects": false,
   "peerDependencies": {
@@ -80,6 +80,7 @@
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^2.1.9",
     "jsdom": "^25.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

@@ -1,0 +1,50 @@
+name: Deploy Demo to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'examples/**'
+      - '.github/workflows/deploy-demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Prepare pages directory
+        run: |
+          mkdir -p _site
+          cp examples/index.html _site/index.html
+          cp -r dist _site/dist
+          sed -i "s|'../dist/index.js'|'./dist/index.js'|g" _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -32,6 +32,18 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Test with Coverage
+        if: matrix.node-version == 22
+        run: npx vitest run --coverage
+
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == 22
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Build
         run: npm run build
 
@@ -58,7 +70,7 @@ jobs:
 
       - name: Publish to npm (if version changed)
         run: |
-          CURRENT=$(npm view tab-sync version 2>/dev/null || echo "0.0.0")
+          CURRENT=$(npm view tab-bridge version 2>/dev/null || echo "0.0.0")
           LOCAL=$(node -p "require('./package.json').version")
           if [ "$CURRENT" != "$LOCAL" ]; then
             npm publish --provenance --access public

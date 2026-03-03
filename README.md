@@ -17,8 +17,9 @@
 [![npm version](https://img.shields.io/npm/v/tab-bridge?style=for-the-badge&color=cb3837&label=npm&logo=npm&logoColor=white)](https://www.npmjs.com/package/tab-bridge)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/tab-bridge?style=for-the-badge&color=6ead0a&label=size&logo=webpack&logoColor=white)](https://bundlephobia.com/package/tab-bridge)
 [![TypeScript](https://img.shields.io/badge/TypeScript-first-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![license](https://img.shields.io/github/license/serbi2012/tab-sync?style=for-the-badge&color=blue&logo=open-source-initiative&logoColor=white)](./LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/serbi2012/tab-sync?style=for-the-badge&color=yellow&logo=github&logoColor=white)](https://github.com/serbi2012/tab-sync)
+[![coverage](https://img.shields.io/codecov/c/github/serbi2012/tab-bridge?style=for-the-badge&color=44cc11&logo=codecov&logoColor=white&label=coverage)](https://codecov.io/gh/serbi2012/tab-bridge)
+[![license](https://img.shields.io/github/license/serbi2012/tab-bridge?style=for-the-badge&color=blue&logo=open-source-initiative&logoColor=white)](./LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/serbi2012/tab-bridge?style=for-the-badge&color=yellow&logo=github&logoColor=white)](https://github.com/serbi2012/tab-bridge)
 
 <br />
 
@@ -26,7 +27,7 @@
 
 <br />
 
-[**Getting Started**](#-getting-started) · [**API**](#-api-reference) · [**React**](#%EF%B8%8F-react) · [**Architecture**](#-architecture) · [**Examples**](#-examples)
+[**Getting Started**](#-getting-started) · [**API**](#-api-reference) · [**React**](#%EF%B8%8F-react) · [**Architecture**](#-architecture) · [**Examples**](#-examples) · [**Live Demo**](https://serbi2012.github.io/tab-bridge/)
 
 </div>
 
@@ -725,7 +726,7 @@ MIT © [serbi2012](https://github.com/serbi2012)
 
 <br />
 
-<a href="https://github.com/serbi2012/tab-sync">
+<a href="https://github.com/serbi2012/tab-bridge">
   <img src="https://img.shields.io/badge/GitHub-tab--bridge-4f46e5?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" />
 </a>
 &nbsp;

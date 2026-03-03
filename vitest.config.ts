@@ -5,8 +5,14 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
     coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'json', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/react/**',
+        'src/index.ts',
+      ],
     },
   },
 });
