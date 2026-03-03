@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage, LeaderClaimPayload } from '../types';
-import { LeaderElection } from './leader-election';
+import type { TabMessage, LeaderClaimPayload, LeaderAckPayload } from '../../src/types';
+import { LeaderElection } from '../../src/core/leader-election';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
+
+let ackGeneration = 1;
 
 function createElection(
   tabId: string,
@@ -30,12 +32,17 @@ function claimMsg(senderId: string, createdAt: number): TabMessage {
     type: 'LEADER_CLAIM',
     senderId,
     timestamp: Date.now(),
-    payload: { createdAt } satisfies LeaderClaimPayload,
+    payload: { createdAt, claimId: `claim-${senderId}`, generation: 1 } satisfies LeaderClaimPayload,
   };
 }
 
-function ackMsg(senderId: string): TabMessage {
-  return { type: 'LEADER_ACK', senderId, timestamp: Date.now(), payload: null };
+function ackMsg(senderId: string, generation = ackGeneration++): TabMessage {
+  return {
+    type: 'LEADER_ACK',
+    senderId,
+    timestamp: Date.now(),
+    payload: { claimId: `claim-${senderId}`, generation } satisfies LeaderAckPayload,
+  };
 }
 
 function heartbeatMsg(senderId: string): TabMessage {

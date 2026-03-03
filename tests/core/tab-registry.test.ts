@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage, TabInfo } from '../types';
-import { TabRegistry } from './tab-registry';
+import type { TabMessage, TabInfo } from '../../src/types';
+import { TabRegistry } from '../../src/core/tab-registry';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

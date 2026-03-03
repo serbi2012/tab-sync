@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage } from '../types';
-import { StorageChannel } from './storage';
+import type { TabMessage } from '../../src/types';
+import { StorageChannel } from '../../src/channels/storage';
 
 function makeMessage(type: TabMessage['type'], senderId: string): TabMessage {
   return { type, senderId, timestamp: Date.now(), payload: null };

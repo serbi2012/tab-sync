@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Emitter } from './emitter';
+import { Emitter } from '../../src/utils/emitter';
 
 interface TestEvents {
   click: { x: number; y: number };

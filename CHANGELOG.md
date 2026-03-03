@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-26
+
+### Added
+
+- **State Transactions** — `sync.transaction()` for atomic multi-key updates with abort support
+- **Broadcast RPC** — `sync.callAll()` to invoke an RPC method on all other tabs and collect responses
+- **`select()` debounce** — optional `debounce` parameter to throttle derived-state callbacks
+- **React `useTabSyncActions()`** — returns `set`, `patch`, `transaction` without subscribing to state (no re-renders)
+- **React `useTabs()`** — subscribe to the list of active tabs
+- **React `useLeaderInfo()`** — subscribe to the current leader's full `TabInfo`
+- **Destroy guards** — all public methods now throw `TabSyncError` with `DESTROYED` code after `sync.destroy()`
+
+### Changed
+
+- **Leader Election** — added `generation` and `claimId` fields for split-brain prevention and stale ACK filtering
+- **RPC `sendResponse`** — graceful fallback when result serialization fails
+- **Type definitions** — split `src/types.ts` into domain-specific files under `src/types/`
+- **Persistence** — extracted into dedicated `src/core/persist.ts` module
+- **Logger** — extracted into `src/utils/logger.ts`
+- **Test structure** — migrated all tests from co-located `src/` to mirrored `tests/` directory
+
 ## [0.1.1] - 2026-03-03
 
 ### Fixed
@@ -39,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tree-Shakable** — code splitting enabled, `sideEffects: false`
 - **CI Pipeline** — GitHub Actions with typecheck, test, build, and auto-publish on version change
 
+[0.2.0]: https://github.com/serbi2012/tab-bridge/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/serbi2012/tab-bridge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/serbi2012/tab-bridge/releases/tag/v0.1.0

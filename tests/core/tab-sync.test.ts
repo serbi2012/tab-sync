@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage } from '../types';
-import { createTabSync } from './tab-sync';
+import type { TabMessage } from '../../src/types';
+import { createTabSync } from '../../src/core/tab-sync';
 
 // Mock BroadcastChannel with cross-instance delivery
 class MockBroadcastChannel {
@@ -245,6 +245,117 @@ describe('createTabSync — RPC', () => {
 
     tab1.destroy();
     tab2.destroy();
+  });
+});
+
+describe('createTabSync — transaction', () => {
+  it('applies atomic multi-key update', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+
+    sync.transaction((state) => ({
+      theme: 'dark',
+      count: state.count + 10,
+    }));
+
+    expect(sync.get('theme')).toBe('dark');
+    expect(sync.get('count')).toBe(10);
+
+    sync.destroy();
+  });
+
+  it('aborts when callback returns null', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    const cb = vi.fn();
+    sync.on('theme', cb);
+
+    sync.transaction(() => null);
+
+    expect(cb).not.toHaveBeenCalled();
+    expect(sync.get('theme')).toBe('light');
+
+    sync.destroy();
+  });
+});
+
+describe('createTabSync — select with debounce', () => {
+  it('calls callback only after debounce delay', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    const cb = vi.fn();
+
+    sync.select(
+      (state) => state.count,
+      cb,
+      { debounce: 100 },
+    );
+
+    sync.set('count', 1);
+    sync.set('count', 2);
+    sync.set('count', 3);
+
+    expect(cb).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(100);
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledWith(3, expect.any(Object));
+
+    sync.destroy();
+  });
+
+  it('unsubscribe clears pending debounce timer', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    const cb = vi.fn();
+
+    const unsub = sync.select(
+      (state) => state.count,
+      cb,
+      { debounce: 100 },
+    );
+
+    sync.set('count', 1);
+    unsub();
+    vi.advanceTimersByTime(200);
+
+    expect(cb).not.toHaveBeenCalled();
+
+    sync.destroy();
+  });
+});
+
+describe('createTabSync — assertAlive guard', () => {
+  it('throws on set after destroy', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    sync.destroy();
+
+    expect(() => sync.set('count', 1)).toThrow('destroyed');
+  });
+
+  it('throws on patch after destroy', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    sync.destroy();
+
+    expect(() => sync.patch({ count: 1 })).toThrow('destroyed');
+  });
+
+  it('throws on transaction after destroy', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    sync.destroy();
+
+    expect(() => sync.transaction(() => ({ count: 1 }))).toThrow('destroyed');
+  });
+
+  it('throws on call after destroy', async () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    sync.destroy();
+
+    expect(() => sync.call('some-tab', 'method')).toThrow('destroyed');
+  });
+
+  it('throws on handle after destroy', () => {
+    const sync = createTabSync<AppState>({ initial: { theme: 'light', count: 0 } });
+    sync.destroy();
+
+    expect(() => sync.handle('method', () => {})).toThrow('destroyed');
   });
 });
 

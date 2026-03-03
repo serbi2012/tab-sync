@@ -4,3 +4,6 @@ export { useTabSync } from './use-tab-sync';
 export { useTabSyncValue } from './use-tab-sync-value';
 export { useTabSyncSelector } from './use-selector';
 export { useIsLeader } from './use-leader';
+export { useTabs } from './use-tabs';
+export { useLeaderInfo } from './use-leader-info';
+export { useTabSyncActions, type TabSyncActions } from './use-actions';

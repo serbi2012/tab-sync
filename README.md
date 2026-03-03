@@ -59,22 +59,22 @@ LWW conflict resolution with batched broadcasts and custom merge strategies
 Bully algorithm with heartbeat monitoring and automatic failover
 
 #### 📡 Cross-Tab RPC
-Fully typed arguments, Promise-based calls with timeout handling
+Fully typed arguments, Promise-based calls with `callAll` broadcast support
 
-#### ⚛️ React Hooks
-Built on `useSyncExternalStore` for zero-tear concurrent rendering
+#### 🔄 Atomic Transactions
+`transaction()` for safe multi-key updates with abort support
 
 </td>
 <td width="50%" valign="top">
+
+#### ⚛️ React Hooks
+7 hooks built on `useSyncExternalStore` — zero-tear concurrent rendering
 
 #### 🛡️ Middleware Pipeline
 Intercept, validate, and transform state changes before they're applied
 
 #### 💾 State Persistence
 Survive page reloads with key whitelisting and custom storage backends
-
-#### 🔒 End-to-End Type Safety
-Discriminated unions, full type inference, and generic constraints
 
 #### 📦 Zero Dependencies
 Native browser APIs only, ~4KB gzipped, fully tree-shakable
@@ -175,6 +175,12 @@ sync.get('theme')                       // Read single key
 sync.getAll()                           // Read full state (stable reference)
 sync.set('theme', 'dark')              // Write single key → broadcasts to all tabs
 sync.patch({ theme: 'dark', count: 5 }) // Write multiple keys in one broadcast
+
+// Atomic multi-key update — return null to abort
+sync.transaction((state) => {
+  if (state.count >= 100) return null;  // abort
+  return { count: state.count + 1, lastUpdated: Date.now() };
+});
 ```
 
 </details>
@@ -195,6 +201,13 @@ sync.onChange((state, changedKeys, meta) => { /* ... */ });
 sync.select(
   (state) => state.items.filter(i => i.done).length,
   (doneCount) => updateBadge(doneCount),
+);
+
+// Debounced derived state — callback fires at most once per 200ms
+sync.select(
+  (state) => state.items.length,
+  (count) => analytics.track('item_count', count),
+  { debounce: 200 },
 );
 ```
 
@@ -248,6 +261,10 @@ sync.handle('getServerTime', () => ({
 
 const { iso } = await sync.call('leader', 'getServerTime');
 const result  = await sync.call(tabId, 'compute', payload, 10_000);
+
+// Broadcast RPC to ALL other tabs and collect responses
+const results = await sync.callAll('getStatus');
+// results: Array<{ tabId: string; result?: T; error?: string }>
 ```
 
 </details>
@@ -359,7 +376,8 @@ First-class React integration built on `useSyncExternalStore` for **zero-tear co
 
 ```tsx
 import {
-  TabSyncProvider, useTabSync, useTabSyncValue, useTabSyncSelector, useIsLeader,
+  TabSyncProvider, useTabSync, useTabSyncValue, useTabSyncSelector,
+  useIsLeader, useTabs, useLeaderInfo, useTabSyncActions,
 } from 'tab-bridge/react';
 ```
 
@@ -441,6 +459,51 @@ function LeaderIndicator() {
   return <span className="badge badge-leader">Leader Tab</span>;
 }
 ```
+
+</details>
+
+<details open>
+<summary><b><code>useTabs()</code> — Active tab list</b></summary>
+
+<br />
+
+```tsx
+function TabList() {
+  const tabs = useTabs();
+  return <p>{tabs.length} tab(s) open</p>;
+}
+```
+
+</details>
+
+<details open>
+<summary><b><code>useLeaderInfo()</code> — Leader tab info</b></summary>
+
+<br />
+
+```tsx
+function LeaderDisplay() {
+  const leader = useLeaderInfo();
+  if (!leader) return <p>No leader yet</p>;
+  return <p>Leader: {leader.id}</p>;
+}
+```
+
+</details>
+
+<details open>
+<summary><b><code>useTabSyncActions()</code> — Write-only (no re-renders)</b></summary>
+
+<br />
+
+```tsx
+function IncrementButton() {
+  const { set, patch, transaction } = useTabSyncActions<MyState>();
+  return <button onClick={() => set('count', prev => prev + 1)}>+1</button>;
+}
+```
+
+Components using only `useTabSyncActions` **never re-render** due to state changes — perfect for write-only controls.
 
 </details>
 

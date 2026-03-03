@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createMessage } from './message';
-import { PROTOCOL_VERSION } from '../types';
+import { createMessage } from '../../src/utils/message';
+import { PROTOCOL_VERSION } from '../../src/types';
 
 describe('createMessage', () => {
   it('creates a message with correct structure', () => {

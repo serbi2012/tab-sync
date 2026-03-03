@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage } from '../types';
-import { BroadcastChannelTransport } from './broadcast';
+import type { TabMessage } from '../../src/types';
+import { BroadcastChannelTransport } from '../../src/channels/broadcast';
 
 // jsdom doesn't ship BroadcastChannel, so we provide a minimal mock
 class MockBroadcastChannel {

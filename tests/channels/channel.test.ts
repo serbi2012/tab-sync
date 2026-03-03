@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createChannel } from './channel';
-import { StorageChannel } from './storage';
-import { BroadcastChannelTransport } from './broadcast';
+import { createChannel } from '../../src/channels/channel';
+import { StorageChannel } from '../../src/channels/storage';
+import { BroadcastChannelTransport } from '../../src/channels/broadcast';
 
 // Minimal mock so BroadcastChannel exists in jsdom
 class MockBroadcastChannel {

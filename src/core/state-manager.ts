@@ -290,7 +290,24 @@ export class StateManager<TState extends Record<string, unknown>> {
     for (const [key, remote] of Object.entries(state)) {
       const local = this.state.get(key);
       if (!local || remote.timestamp > local.timestamp) {
-        this.state.set(key, { value: remote.value, timestamp: remote.timestamp });
+        let finalValue: unknown = remote.value;
+
+        if (this.mergeFn && local) {
+          finalValue = this.mergeFn(local.value, remote.value, key as keyof TState);
+        }
+
+        if (this.interceptRemote) {
+          const result = this.interceptRemote(
+            key as keyof TState,
+            finalValue,
+            local?.value,
+            meta,
+          );
+          if (result === false) continue;
+          if (result && 'value' in result) finalValue = result.value;
+        }
+
+        this.state.set(key, { value: finalValue, timestamp: remote.timestamp });
         changedKeys.push(key as keyof TState);
       }
     }
@@ -308,8 +325,8 @@ export class StateManager<TState extends Record<string, unknown>> {
 
   private notifyKey(key: string, value: unknown, meta: ChangeMeta): void {
     const listeners = this.keyListeners.get(key);
-    if (!listeners) return;
-    for (const cb of listeners) {
+    if (!listeners || listeners.size === 0) return;
+    for (const cb of [...listeners]) {
       cb(value, meta);
     }
   }
@@ -317,7 +334,7 @@ export class StateManager<TState extends Record<string, unknown>> {
   private notifyChange(changedKeys: (keyof TState)[], meta: ChangeMeta): void {
     if (this.changeListeners.size === 0) return;
     const snapshot = this.getAll();
-    for (const cb of this.changeListeners) {
+    for (const cb of [...this.changeListeners]) {
       cb(snapshot, changedKeys, meta);
     }
   }

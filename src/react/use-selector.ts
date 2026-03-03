@@ -6,6 +6,9 @@ import { TabSyncContext } from './context';
  * Subscribe to a **derived value** from the synced state.
  * Only re-renders when the selector's output actually changes.
  *
+ * Uses `instance.select()` internally so only changed-key
+ * evaluations trigger the selector, reducing unnecessary work.
+ *
  * ```tsx
  * const doneCount = useTabSyncSelector(
  *   (s) => s.todos.filter(t => t.done).length,
@@ -48,14 +51,14 @@ export function useTabSyncSelector<
 
   const subscribe = useCallback(
     (onStoreChange: () => void) =>
-      instance.onChange(() => {
-        const next = selectorRef.current(instance.getAll());
-        const equal = isEqualRef.current ?? Object.is;
-        if (!equal(resultRef.current, next)) {
+      instance.select(
+        (state) => selectorRef.current(state),
+        (next) => {
           resultRef.current = next;
           onStoreChange();
-        }
-      }),
+        },
+        { isEqual: isEqualRef.current },
+      ),
     [instance],
   );
 

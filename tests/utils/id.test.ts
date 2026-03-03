@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateTabId } from './id';
+import { generateTabId } from '../../src/utils/id';
 
 describe('generateTabId', () => {
   it('returns a valid UUID v4 format', () => {

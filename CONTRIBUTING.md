@@ -88,7 +88,7 @@ src/
 ## Testing
 
 - Tests use **Vitest** with **jsdom** environment
-- Place test files next to source files: `foo.ts` → `foo.test.ts`
+- Place test files in the mirrored `tests/` directory: `src/core/foo.ts` → `tests/core/foo.test.ts`
 - Test both happy paths and edge cases
 - Mock `BroadcastChannel` and `localStorage` as needed
 

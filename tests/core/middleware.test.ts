@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runMiddleware, notifyMiddleware, destroyMiddleware } from './middleware';
-import type { Middleware, MiddlewareContext, ChangeMeta } from '../types';
+import { runMiddleware, notifyMiddleware, destroyMiddleware } from '../../src/core/middleware';
+import type { Middleware, MiddlewareContext, ChangeMeta } from '../../src/types';
 
 type TestState = { name: string; age: number };
 

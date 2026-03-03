@@ -5,122 +5,21 @@ import type {
   ChangeMeta,
   TabMessage,
   LeaderOptions,
-  PersistOptions,
   Middleware,
   RPCMap,
   SendFn,
-  PROTOCOL_VERSION as _PV,
 } from '../types';
 import { PROTOCOL_VERSION } from '../types';
 import { generateTabId } from '../utils/id';
-import { hasLocalStorage } from '../utils/env';
+import { TabSyncError, ErrorCode } from '../utils/errors';
+import { createLogger } from '../utils/logger';
 import { createChannel, type Channel } from '../channels/channel';
 import { StateManager } from './state-manager';
 import { TabRegistry } from './tab-registry';
 import { LeaderElection } from './leader-election';
 import { RPCHandler } from './rpc';
 import { runMiddleware, notifyMiddleware, destroyMiddleware } from './middleware';
-
-// ── Persistence Helpers ─────────────────────────────────────────────────────
-
-function resolvePersistOptions<TState extends Record<string, unknown>>(
-  opt: PersistOptions<TState> | boolean | undefined,
-): PersistOptions<TState> | null {
-  if (!opt) return null;
-  if (opt === true) return {};
-  return opt;
-}
-
-function loadPersistedState<TState extends Record<string, unknown>>(
-  opts: PersistOptions<TState>,
-): Partial<TState> {
-  const storage = opts.storage ?? (hasLocalStorage ? localStorage : null);
-  if (!storage) return {};
-  const key = opts.key ?? 'tab-sync:state';
-  const deserialize = opts.deserialize ?? JSON.parse;
-  try {
-    const raw = storage.getItem(key);
-    if (!raw) return {};
-    const parsed = deserialize(raw) as Partial<TState>;
-    return filterPersistKeys(parsed, opts);
-  } catch {
-    return {};
-  }
-}
-
-function filterPersistKeys<TState extends Record<string, unknown>>(
-  state: Partial<TState>,
-  opts: PersistOptions<TState>,
-): Partial<TState> {
-  const include = opts.include ? new Set(opts.include) : null;
-  const exclude = opts.exclude ? new Set(opts.exclude) : null;
-  const result: Partial<TState> = {};
-  for (const [key, value] of Object.entries(state)) {
-    const k = key as keyof TState;
-    if (exclude?.has(k)) continue;
-    if (include && !include.has(k)) continue;
-    (result as Record<string, unknown>)[key] = value;
-  }
-  return result;
-}
-
-function createPersistSaver<TState extends Record<string, unknown>>(
-  opts: PersistOptions<TState>,
-  onError: (e: Error) => void,
-): { save: (state: Readonly<TState>) => void; flush: () => void; destroy: () => void } {
-  const storage = opts.storage ?? (hasLocalStorage ? localStorage : null);
-  if (!storage) return { save() {}, flush() {}, destroy() {} };
-
-  const key = opts.key ?? 'tab-sync:state';
-  const serialize = opts.serialize ?? JSON.stringify;
-  const debounce = opts.debounce ?? 100;
-
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let latestState: Readonly<TState> | null = null;
-
-  function doSave() {
-    if (!latestState) return;
-    try {
-      const filtered = filterPersistKeys({ ...latestState } as Partial<TState>, opts);
-      storage!.setItem(key, serialize(filtered));
-    } catch (e) {
-      onError(e instanceof Error ? e : new Error(String(e)));
-    }
-    latestState = null;
-  }
-
-  return {
-    save(state: Readonly<TState>) {
-      latestState = state;
-      if (!timer) {
-        timer = setTimeout(() => {
-          timer = null;
-          doSave();
-        }, debounce);
-      }
-    },
-    flush() {
-      if (timer) { clearTimeout(timer); timer = null; }
-      doSave();
-    },
-    destroy() {
-      if (timer) { clearTimeout(timer); timer = null; }
-      doSave();
-    },
-  };
-}
-
-// ── Debug Logger ────────────────────────────────────────────────────────────
-
-function createLogger(enabled: boolean, tabId: string) {
-  if (!enabled) return { log: (() => {}) as (...args: unknown[]) => void };
-  const prefix = `%c[tab-sync:${tabId.slice(0, 8)}]`;
-  const style = 'color:#818cf8;font-weight:600';
-  return {
-    log: (label: string, ...args: unknown[]) =>
-      console.log(prefix, style, label, ...args),
-  };
-}
+import { resolvePersistOptions, loadPersistedState, createPersistSaver } from './persist';
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
@@ -167,7 +66,7 @@ export function createTabSync<
   }
 
   // ── Channel ──
-  const channel: Channel = createChannel(channelName, opts.transport);
+  const channel: Channel = createChannel(channelName, opts.transport, onError);
 
   // ── Logger ──
   const { log } = createLogger(debug, tabId);
@@ -213,6 +112,7 @@ export function createTabSync<
     send,
     tabId,
     resolveLeaderId: () => election?.getLeaderId() ?? null,
+    resolveTabIds: () => registry.getTabs().map((t) => t.id),
     onError,
   });
 
@@ -267,9 +167,16 @@ export function createTabSync<
   let ready = true;
   let destroyed = false;
 
+  // ── Destroy guard ──
+
+  function assertAlive(): void {
+    if (destroyed) throw TabSyncError.destroyed();
+  }
+
   // ── Middleware-wrapped state operations ──
 
   function middlewareSet<K extends keyof TState>(key: K, value: TState[K]): void {
+    assertAlive();
     if (middlewares.length === 0) {
       stateManager.set(key, value);
       if (persister) persister.save(stateManager.getAll());
@@ -295,6 +202,7 @@ export function createTabSync<
   }
 
   function middlewarePatch(partial: Partial<TState>): void {
+    assertAlive();
     if (middlewares.length === 0) {
       stateManager.patch(partial);
       if (persister) persister.save(stateManager.getAll());
@@ -338,6 +246,14 @@ export function createTabSync<
     set: middlewareSet,
     patch: middlewarePatch,
 
+    transaction: (fn: (state: Readonly<TState>) => Partial<TState> | null): void => {
+      assertAlive();
+      const current = stateManager.getAll();
+      const result = fn(current);
+      if (result === null) return;
+      middlewarePatch(result);
+    },
+
     // Subscriptions
     on: <K extends keyof TState>(
       key: K,
@@ -366,16 +282,36 @@ export function createTabSync<
     select: <TResult>(
       selector: (state: Readonly<TState>) => TResult,
       callback: (result: TResult, meta: ChangeMeta) => void,
-      isEqual: (a: TResult, b: TResult) => boolean = Object.is,
+      options?: {
+        isEqual?: (a: TResult, b: TResult) => boolean;
+        debounce?: number;
+      },
     ) => {
+      const isEqual = options?.isEqual ?? Object.is;
+      const debounceMs = options?.debounce;
       let prev = selector(stateManager.getAll());
-      return stateManager.onChange((state, _keys, meta) => {
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const unsub = stateManager.onChange((state, _keys, meta) => {
         const next = selector(state);
         if (!isEqual(prev, next)) {
           prev = next;
-          callback(next, meta);
+          if (debounceMs !== undefined && debounceMs > 0) {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              debounceTimer = null;
+              callback(prev, meta);
+            }, debounceMs);
+          } else {
+            callback(next, meta);
+          }
         }
       });
+
+      return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        unsub();
+      };
     },
 
     // Leader
@@ -398,6 +334,14 @@ export function createTabSync<
     },
 
     waitForLeader: (): Promise<TabInfo> => {
+      if (!leaderEnabled) {
+        const selfInfo = registry.getTab(tabId);
+        if (selfInfo) return Promise.resolve(selfInfo);
+        return Promise.reject(
+          new TabSyncError('Leader election is disabled', ErrorCode.RPC_NO_LEADER),
+        );
+      }
+
       const leader = instance.getLeader();
       if (leader) return Promise.resolve(leader);
 
@@ -424,11 +368,20 @@ export function createTabSync<
     onTabChange: (callback) => registry.onTabChange(callback),
 
     // RPC
-    call: ((target: string | 'leader', method: string, args?: unknown, timeout?: number) =>
-      rpc.call(target, method, args, timeout)) as TabSyncInstance<TState, TRPCMap>['call'],
+    call: ((target: string | 'leader', method: string, args?: unknown, timeout?: number) => {
+      assertAlive();
+      return rpc.call(target, method, args, timeout);
+    }) as TabSyncInstance<TState, TRPCMap>['call'],
 
-    handle: ((method: string, handler: (args: unknown, callerTabId: string) => unknown) =>
-      rpc.handle(method, handler)) as TabSyncInstance<TState, TRPCMap>['handle'],
+    handle: ((method: string, handler: (args: unknown, callerTabId: string) => unknown) => {
+      assertAlive();
+      return rpc.handle(method, handler);
+    }) as TabSyncInstance<TState, TRPCMap>['handle'],
+
+    callAll: ((method: string, args?: unknown, timeout?: number) => {
+      assertAlive();
+      return rpc.callAll(method, args, timeout);
+    }) as TabSyncInstance<TState, TRPCMap>['callAll'],
 
     // Lifecycle
     destroy: () => {

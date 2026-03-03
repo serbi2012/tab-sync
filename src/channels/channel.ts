@@ -11,19 +11,19 @@ export interface Channel {
 export function createChannel(
   channelName: string,
   transport?: 'broadcast-channel' | 'local-storage',
+  onError?: (error: Error) => void,
 ): Channel {
   if (transport === 'local-storage') {
-    return new StorageChannel(channelName);
+    return new StorageChannel(channelName, onError);
   }
 
   if (transport === 'broadcast-channel') {
     return new BroadcastChannelTransport(channelName);
   }
 
-  // Auto-detect: prefer BroadcastChannel, fall back to localStorage
   if (typeof BroadcastChannel !== 'undefined') {
     return new BroadcastChannelTransport(channelName);
   }
 
-  return new StorageChannel(channelName);
+  return new StorageChannel(channelName, onError);
 }

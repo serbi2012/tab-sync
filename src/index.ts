@@ -29,6 +29,8 @@ export type {
   RPCMap,
   RPCArgs,
   RPCResult,
+  RPCCallAllResult,
+  LeaderAckPayload,
 } from './types';
 
 export { PROTOCOL_VERSION } from './types';
@@ -45,6 +47,12 @@ export { TabRegistry, type TabRegistryOptions } from './core/tab-registry';
 export { LeaderElection, type LeaderElectionOptions } from './core/leader-election';
 export { RPCHandler, type RPCHandlerOptions } from './core/rpc';
 export { runMiddleware, notifyMiddleware, destroyMiddleware } from './core/middleware';
+export {
+  resolvePersistOptions,
+  loadPersistedState,
+  createPersistSaver,
+  type PersistSaver,
+} from './core/persist';
 
 // ── Utils ──
 export { generateTabId } from './utils/id';
@@ -54,3 +62,4 @@ export { createMessage } from './utils/message';
 export { Emitter } from './utils/emitter';
 export { TabSyncError, ErrorCode } from './utils/errors';
 export { isBrowser, hasDocument, hasLocalStorage, hasBroadcastChannel, hasCrypto } from './utils/env';
+export { createLogger, type Logger } from './utils/logger';

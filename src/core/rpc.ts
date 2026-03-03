@@ -1,4 +1,4 @@
-import type { TabMessage, RpcRequestPayload, RpcResponsePayload, SendFn } from '../types';
+import type { TabMessage, RpcRequestPayload, RpcResponsePayload, RPCCallAllResult, SendFn } from '../types';
 import { monotonic } from '../utils/timestamp';
 import { generateTabId } from '../utils/id';
 import { TabSyncError, ErrorCode } from '../utils/errors';
@@ -11,10 +11,13 @@ interface PendingCall {
   timer: ReturnType<typeof setTimeout>;
 }
 
+export type { RPCCallAllResult };
+
 export interface RPCHandlerOptions {
   send: SendFn;
   tabId: string;
   resolveLeaderId?: () => string | null;
+  resolveTabIds?: () => string[];
   onError?: (error: Error) => void;
 }
 
@@ -22,6 +25,7 @@ export class RPCHandler {
   private readonly send: SendFn;
   private readonly tabId: string;
   private readonly resolveLeaderId: () => string | null;
+  private readonly resolveTabIds: () => string[];
   private readonly onError: (error: Error) => void;
   private readonly handlers = new Map<
     string,
@@ -33,6 +37,7 @@ export class RPCHandler {
     this.send = options.send;
     this.tabId = options.tabId;
     this.resolveLeaderId = options.resolveLeaderId ?? (() => null);
+    this.resolveTabIds = options.resolveTabIds ?? (() => []);
     this.onError = options.onError ?? (() => {});
   }
 
@@ -71,6 +76,24 @@ export class RPCHandler {
         payload: { callId, method, args } satisfies RpcRequestPayload,
       } as TabMessage);
     });
+  }
+
+  callAll<TResult>(
+    method: string,
+    args?: unknown,
+    timeout = DEFAULT_TIMEOUT,
+  ): Promise<RPCCallAllResult<TResult>[]> {
+    const tabIds = this.resolveTabIds().filter((id) => id !== this.tabId);
+
+    if (tabIds.length === 0) return Promise.resolve([]);
+
+    return Promise.all(
+      tabIds.map((targetId) =>
+        this.call<TResult>(targetId, method, args, timeout)
+          .then((result) => ({ tabId: targetId, result } as RPCCallAllResult<TResult>))
+          .catch((err: Error) => ({ tabId: targetId, error: err.message } as RPCCallAllResult<TResult>)),
+      ),
+    );
   }
 
   handle<TArgs = unknown, TResult = unknown>(
@@ -159,12 +182,32 @@ export class RPCHandler {
     result?: unknown,
     error?: string,
   ): void {
-    this.send({
-      type: 'RPC_RESPONSE',
-      senderId: this.tabId,
-      targetId,
-      timestamp: monotonic(),
-      payload: { callId, result, error } satisfies RpcResponsePayload,
-    } as TabMessage);
+    try {
+      this.send({
+        type: 'RPC_RESPONSE',
+        senderId: this.tabId,
+        targetId,
+        timestamp: monotonic(),
+        payload: { callId, result, error } satisfies RpcResponsePayload,
+      } as TabMessage);
+    } catch (e) {
+      const serErr = new TabSyncError(
+        `Failed to serialize RPC response for "${callId}": ${e instanceof Error ? e.message : String(e)}`,
+        ErrorCode.CHANNEL_SEND_FAILED,
+        e,
+      );
+      this.onError(serErr);
+      try {
+        this.send({
+          type: 'RPC_RESPONSE',
+          senderId: this.tabId,
+          targetId,
+          timestamp: monotonic(),
+          payload: { callId, result: undefined, error: serErr.message } satisfies RpcResponsePayload,
+        } as TabMessage);
+      } catch {
+        // unable to send error response either
+      }
+    }
   }
 }

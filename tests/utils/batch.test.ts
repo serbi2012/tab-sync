@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createBatcher } from './batch';
+import { createBatcher } from '../../src/utils/batch';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

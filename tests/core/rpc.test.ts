@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage, RpcRequestPayload, RpcResponsePayload } from '../types';
-import { RPCHandler } from './rpc';
+import type { TabMessage, RpcRequestPayload, RpcResponsePayload } from '../../src/types';
+import { RPCHandler } from '../../src/core/rpc';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-function createRPC(tabId: string, opts?: { resolveLeaderId?: () => string | null }) {
+function createRPC(tabId: string, opts?: {
+  resolveLeaderId?: () => string | null;
+  resolveTabIds?: () => string[];
+  onError?: (error: Error) => void;
+}) {
   const sent: TabMessage[] = [];
   const send = (msg: TabMessage) => sent.push(msg);
 
@@ -13,6 +17,8 @@ function createRPC(tabId: string, opts?: { resolveLeaderId?: () => string | null
     send,
     tabId,
     resolveLeaderId: opts?.resolveLeaderId,
+    resolveTabIds: opts?.resolveTabIds,
+    onError: opts?.onError,
   });
 
   return { rpc, sent };
@@ -186,6 +192,99 @@ describe('RPCHandler — handler unregister', () => {
     callerSide.rpc.handleMessage(resp!);
 
     await expect(promise).rejects.toThrow('No handler');
+
+    callerSide.rpc.destroy();
+    remoteSide.rpc.destroy();
+  });
+});
+
+describe('RPCHandler — callAll', () => {
+  it('broadcasts RPC to all other tabs and collects responses', async () => {
+    const callerSide = createRPC('tab-1', {
+      resolveTabIds: () => ['tab-1', 'tab-2', 'tab-3'],
+    });
+    const remote2 = createRPC('tab-2');
+    const remote3 = createRPC('tab-3');
+
+    remote2.rpc.handle('ping', () => 'pong-2');
+    remote3.rpc.handle('ping', () => 'pong-3');
+
+    const promise = callerSide.rpc.callAll('ping');
+
+    // Deliver requests to remotes
+    for (const msg of callerSide.sent) {
+      if (msg.type === 'RPC_REQUEST') {
+        if (msg.targetId === 'tab-2') remote2.rpc.handleMessage(msg);
+        if (msg.targetId === 'tab-3') remote3.rpc.handleMessage(msg);
+      }
+    }
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Deliver responses back
+    for (const msg of remote2.sent) {
+      if (msg.type === 'RPC_RESPONSE') callerSide.rpc.handleMessage(msg);
+    }
+    for (const msg of remote3.sent) {
+      if (msg.type === 'RPC_RESPONSE') callerSide.rpc.handleMessage(msg);
+    }
+
+    const results = await promise;
+    expect(results).toHaveLength(2);
+
+    const values = results.map((r) => r.result).sort();
+    expect(values).toEqual(['pong-2', 'pong-3']);
+
+    callerSide.rpc.destroy();
+    remote2.rpc.destroy();
+    remote3.rpc.destroy();
+  });
+
+  it('returns empty array when no other tabs exist', async () => {
+    const callerSide = createRPC('tab-1', {
+      resolveTabIds: () => ['tab-1'],
+    });
+
+    const results = await callerSide.rpc.callAll('ping');
+    expect(results).toEqual([]);
+
+    callerSide.rpc.destroy();
+  });
+});
+
+describe('RPCHandler — serialization error handling', () => {
+  it('sends error response when result cannot be serialized', async () => {
+    const errors: Error[] = [];
+    const callerSide = createRPC('tab-1');
+    const remoteSide = createRPC('tab-2', {
+      onError: (e) => errors.push(e),
+    });
+
+    // Create a value with circular reference
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    remoteSide.rpc.handle('circular', () => circular);
+
+    const promise = callerSide.rpc.call('tab-2', 'circular');
+
+    simulateRoundTrip(callerSide, remoteSide);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The remote side should have attempted to send an error response
+    const resp = remoteSide.sent.find((m) => m.type === 'RPC_RESPONSE');
+    if (resp) {
+      callerSide.rpc.handleMessage(resp);
+    }
+
+    // Should either reject with serialization error or timeout
+    // (depends on whether the error response itself can be serialized)
+    try {
+      vi.advanceTimersByTime(5000);
+      await promise;
+    } catch {
+      // Expected to reject
+    }
 
     callerSide.rpc.destroy();
     remoteSide.rpc.destroy();

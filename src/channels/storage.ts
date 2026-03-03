@@ -16,11 +16,13 @@ const KEY_PREFIX = '__tab_sync__';
 export class StorageChannel implements Channel {
   private readonly key: string;
   private readonly listeners = new Set<(event: StorageEvent) => void>();
+  private readonly onError?: (error: Error) => void;
   private closed = false;
   private seq = 0;
 
-  constructor(channelName: string) {
+  constructor(channelName: string, onError?: (error: Error) => void) {
     this.key = `${KEY_PREFIX}${channelName}`;
+    this.onError = onError;
   }
 
   postMessage(message: TabMessage): void {
@@ -28,8 +30,8 @@ export class StorageChannel implements Channel {
     try {
       const wrapped = JSON.stringify({ m: message, s: this.seq++ });
       localStorage.setItem(this.key, wrapped);
-    } catch {
-      // localStorage quota exceeded or unavailable
+    } catch (e) {
+      this.onError?.(e instanceof Error ? e : new Error(String(e)));
     }
   }
 

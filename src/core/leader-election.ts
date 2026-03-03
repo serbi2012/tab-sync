@@ -1,5 +1,6 @@
-import type { TabMessage, LeaderClaimPayload, SendFn } from '../types';
+import type { TabMessage, LeaderClaimPayload, LeaderAckPayload, SendFn } from '../types';
 import { monotonic } from '../utils/timestamp';
+import { generateTabId } from '../utils/id';
 
 export interface LeaderElectionOptions {
   send: SendFn;
@@ -27,6 +28,9 @@ export class LeaderElection {
   private leaderWatchTimer: ReturnType<typeof setInterval> | null = null;
   private lastLeaderHeartbeat = 0;
   private electing = false;
+
+  private generation = 0;
+  private currentClaimId: string | null = null;
 
   private readonly leaderCallbacks = new Set<() => void | (() => void)>();
   private readonly leaderCleanups = new Map<() => void | (() => void), () => void>();
@@ -83,7 +87,7 @@ export class LeaderElection {
         this.handleClaim(message.payload as LeaderClaimPayload, message.senderId);
         break;
       case 'LEADER_ACK':
-        this.handleAck(message.senderId);
+        this.handleAck(message.payload as LeaderAckPayload, message.senderId);
         break;
       case 'LEADER_HEARTBEAT':
         this.handleHeartbeat(message.senderId);
@@ -117,11 +121,18 @@ export class LeaderElection {
     if (this.electing) return;
     this.electing = true;
 
+    this.generation++;
+    this.currentClaimId = generateTabId();
+
     this.send({
       type: 'LEADER_CLAIM',
       senderId: this.tabId,
       timestamp: monotonic(),
-      payload: { createdAt: this.tabCreatedAt } satisfies LeaderClaimPayload,
+      payload: {
+        createdAt: this.tabCreatedAt,
+        claimId: this.currentClaimId,
+        generation: this.generation,
+      } satisfies LeaderClaimPayload,
     } as TabMessage);
 
     this.electionTimer = setTimeout(() => {
@@ -140,9 +151,12 @@ export class LeaderElection {
     }
   }
 
-  private handleAck(senderId: string): void {
+  private handleAck(payload: LeaderAckPayload, senderId: string): void {
+    if (payload.generation < this.generation) return;
+
     this.clearElectionTimer();
     this.electing = false;
+    this.generation = Math.max(this.generation, payload.generation);
     this.setLeader(senderId);
   }
 
@@ -168,7 +182,10 @@ export class LeaderElection {
       type: 'LEADER_ACK',
       senderId: this.tabId,
       timestamp: monotonic(),
-      payload: null,
+      payload: {
+        claimId: this.currentClaimId!,
+        generation: this.generation,
+      } satisfies LeaderAckPayload,
     } as TabMessage);
 
     this.startHeartbeat();
@@ -181,7 +198,7 @@ export class LeaderElection {
 
     if (this.isLeader() && !wasLeader) {
       this.startHeartbeat();
-      for (const cb of this.leaderCallbacks) {
+      for (const cb of [...this.leaderCallbacks]) {
         const cleanup = cb();
         if (typeof cleanup === 'function') {
           this.leaderCleanups.set(cb, cleanup);

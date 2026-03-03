@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { monotonic } from './timestamp';
+import { monotonic } from '../../src/utils/timestamp';
 
 describe('monotonic', () => {
   it('returns a positive number', () => {

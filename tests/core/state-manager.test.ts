@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TabMessage, ChangeMeta, StateUpdatePayload, StateSyncResponsePayload } from '../types';
-import { StateManager } from './state-manager';
+import type { TabMessage, ChangeMeta, StateUpdatePayload, StateSyncResponsePayload } from '../../src/types';
+import { StateManager } from '../../src/core/state-manager';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
